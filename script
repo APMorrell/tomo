@@ -1,0 +1,225 @@
+#======================#
+#   BMIT SCRIPT 2020   #
+#       15.05.20       #
+#======================#
+
+#======================#
+#   USER VARIABLES     #
+#======================#
+#   STEP 1: input folder locations #
+PR_folder_location = 'C:\\Users\\Alex-\\Desktop\\Tomography\\TOMOGRAPHY SCRIPT 2020\\PR_L45_1_2'
+ABS_folder_location = 'C:\\Users\\Alex-\\Desktop\\Tomography\\TOMOGRAPHY SCRIPT 2020\\ABS_L45_1_2'
+
+#   STEP 2: check the inital abs image crop #
+dywt_show_initial_crop = 0
+x_start, x_width, y_start, y_width = 500, 1600, 300, 1550           
+
+#   STEP 3: picking a sub-volume #
+dywt_show_multiple_slices = 0
+dywt_show_sub_volume = 1
+x1, x2 = 400, 800
+y1, y2 = 400, 800
+z1 , z2 = 0, 400 
+
+#   STEP 4: Mask sub-volume? #
+dywt_check_mask = 0
+dywt_use_mask = 0   # This will only work on sub-volumes containing background all the way around #
+
+#   STEP 5: PR Segmentation #
+dywt_show_pr_seg = 1
+pr_threshold_value = 150            # value to remove bone, leaving suture, porosities and some lacunae #
+
+#   STEP 6: Identify Suture(s) #
+dywt_show_suture_helper = 1
+
+suture_coords = []
+suture_coords.append([100, 100])
+suture_coords.append([235, 225])
+suture_coords.append([366, 332])
+
+
+#======================# 
+#       MODULES        #
+#======================#
+import numpy as np
+import matplotlib.pyplot as plt
+import copy, os
+from datetime import datetime
+from skimage import io, feature, morphology
+from skimage.measure import label, regionprops
+from scipy import ndimage as ndi
+
+start_time = datetime.now()
+#======================#
+class Region(object):
+    labelNumber = 0
+    regionProps = None
+    isBackground = False
+    
+
+
+
+
+
+#======================#
+#     1.  LOAD         #
+#======================#
+PR_file_list, ABS_file_list = os.listdir(PR_folder_location), os.listdir(ABS_folder_location)
+
+#======================#
+#     2. ABS crop      #
+#======================#
+if dywt_show_initial_crop > 0:
+    im_pr_IC, im_abs_IC = io.imread(PR_folder_location + '\\' + PR_file_list[0]), io.imread(ABS_folder_location + '\\' + ABS_file_list[0])[y_start: y_start + y_width, x_start: x_start + x_width]
+    plt.figure()
+    plt.subplot(121)
+    plt.title('PR image (' + str(im_pr_IC.shape[1]) + ' by ' + str(im_pr_IC.shape[0]) + ').')
+    plt.imshow(im_pr_IC, cmap = 'Greys_r')
+    plt.subplot(122)
+    plt.title('ABS image (' + str(im_abs_IC.shape[1]) + ' by ' + str(im_abs_IC.shape[0]) + ').')
+    plt.imshow(im_abs_IC, cmap = 'Greys_r')
+
+#======================#
+#    3. sub-volume     #
+#======================#
+if dywt_show_multiple_slices > 0:
+    cs1 = io.imread(PR_folder_location + '\\' + PR_file_list[0])
+    cs2 = io.imread(PR_folder_location + '\\' + PR_file_list[750])
+    cs3 = io.imread(PR_folder_location + '\\' + PR_file_list[1500])
+    cs4 = io.imread(PR_folder_location + '\\' + PR_file_list[2000])
+    
+    plt.figure()
+    plt.subplot(221)
+    plt.title('Slice @ 0')
+    plt.imshow(cs1, cmap = 'Greys_r')
+    
+    plt.subplot(222)
+    plt.title('Slice @ 750')
+    plt.imshow(cs2, cmap = 'Greys_r')
+    
+    plt.subplot(223)
+    plt.title('Slice @ 1500')
+    plt.imshow(cs3, cmap = 'Greys_r')
+    
+    plt.subplot(224)
+    plt.title('Slice @ 2000')
+    plt.imshow(cs4, cmap = 'Greys_r')
+    
+if dywt_show_sub_volume > 0:
+    im_pr_sub1, im_pr_sub2 = io.imread(PR_folder_location + '\\' + PR_file_list[z1]), io.imread(PR_folder_location + '\\' + PR_file_list[z1])
+    
+    plt.figure()
+    plt.subplot(121)
+    plt.title('Slice @ ' + str(z1))
+    plt.imshow(im_pr_sub1, cmap = 'Greys_r')
+    plt.plot((x1, x2, x2, x1, x1),(y1, y1, y2, y2, y1), color = 'red')
+    plt.subplot(122)
+    plt.title('Slice @ ' + str(z2))
+    plt.imshow(im_pr_sub2, cmap = 'Greys_r')
+    plt.plot((x1, x2, x2, x1, x1),(y1, y1, y2, y2, y1), color = 'red')
+   
+#======================#
+#      4. Mask         #
+#======================#   
+if dywt_check_mask > 0:
+    im_pr = io.imread(PR_folder_location + '\\' + PR_file_list[z1])[y1:y2, x1:x2]
+    
+    edges = feature.canny(im_pr, sigma = 2)
+    dialated = morphology.binary_dilation(edges, selem = None)
+    dialated = morphology.binary_dilation(dialated, selem = None)
+    dialated = morphology.binary_dilation(dialated, selem = None)
+    mask = ndi.binary_fill_holes(dialated)
+    mask = morphology.binary_erosion(mask, selem = None)
+    mask = morphology.binary_erosion(mask, selem = None)
+    mask = morphology.binary_erosion(mask, selem = None)
+    mask = morphology.binary_erosion(mask, selem = None)
+    mask = morphology.binary_erosion(mask, selem = None)
+    mask = morphology.binary_erosion(mask, selem = None)
+    im_pr_m = im_pr * mask
+    
+    plt.figure()
+    plt.subplot(131)
+    plt.imshow(im_pr, cmap = 'Greys_r')
+    plt.subplot(132)
+    plt.imshow(edges, cmap = 'Greys_r')
+    plt.subplot(133)
+    plt.imshow(im_pr_m, cmap = 'Greys_r')
+
+#======================#
+#  5. PR Segmentation  #
+#======================#
+if dywt_show_pr_seg > 0:
+    im_pr = io.imread(PR_folder_location + '\\' + PR_file_list[z1])[y1:y2, x1:x2]    
+    im_pr_thresh = np.where(im_pr < pr_threshold_value, im_pr, 0)
+    
+    plt.figure()
+    plt.suptitle('Has this removed the bone? \n Removed values of ' +str(pr_threshold_value) + ' and above.'  )
+    plt.subplot(121)
+    plt.title('Original Pr Image')
+    plt.imshow(im_pr, cmap = 'Greys_r')
+    plt.subplot(122)
+    plt.title('PR Image Thresh')
+    plt.imshow(im_pr_thresh, cmap = 'Greys_r')
+
+#======================#
+#    6. Suture(s)      #
+#======================#
+if dywt_show_suture_helper > 0 :
+    im_pr = io.imread(PR_folder_location + '\\' + PR_file_list[z1])[y1:y2, x1:x2]    
+    im_pr_thresh = np.where(im_pr < pr_threshold_value, im_pr, 0)
+    im_pr_binary = np.where(im_pr < pr_threshold_value, 1, 0)
+    
+    label = label(im_pr_binary)
+    pr_regionprops = regionprops(label)
+    
+    regions = []
+    for i, regionprop in enumerate(pr_regionprops):
+        r = Region()
+        r.labelNumber = i
+        r.regionProps = regionprop
+        regions.append(r)
+    
+    suture_mask = np.zeros_like(im_pr)
+    for suture_coordinate in suture_coords:
+        temp_mask = np.zeros_like(im_pr)
+        regionNumber = label[suture_coordinate[0], suture_coordinate[1]]
+        temp_mask = np.where(label == regions[regionNumber].labelNumber, 1, 0)
+        suture_mask += temp_mask.astype('uint8')
+    
+    
+    
+    
+    
+    plt.figure()
+    plt.imshow(label)
+    
+    
+    
+    
+    '''
+    iteration_regionprops = range(0, len(pr_regionprops)-1)
+    pr_regionprops_ordered = np.zeros((len(pr_regionprops)-1, 2))
+    pr_regionprops_ordered[:,1] = range(0, len(pr_regionprops)-1)
+    for i in iteration_regionprops:
+        pr_regionprops_ordered[i,0] = pr_regionprops[i].filled_area
+    pr_regionprops_ordered = pr_regionprops_ordered[pr_regionprops_ordered[:,0].argsort()[::-1]]    
+        
+    
+
+    
+    plt.figure()
+    plt.subplot(221)
+    plt.title('Original Image')
+    plt.imshow(suture, cmap = 'Greys_r')
+    
+        
+
+
+    '''
+#======================#
+#      RUN TIME        #
+#======================#
+print('Script time = ' + str(datetime.now()- start_time))
+
+#======================#
+
